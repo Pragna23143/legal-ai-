@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LexiClear AI | Generative AI for Demystifying Legal Documents</title>
+  <meta name="description" content="Translate dense legalese into plain English, detect hidden penalties and compliance risks, and chat with your legal agreements using Gemini AI." />
+  
+  <!-- Modern Inter & JetBrains Mono Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body>
+  <div class="app-wrapper">
+    <!-- TOP NAVIGATION BAR -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="logo-box">
+          <span class="logo-icon">⚖️</span>
+          <div class="logo-text">
+            <span class="brand-name">LexiClear <span class="brand-badge">AI</span></span>
+            <span class="brand-tagline">Legal Intelligence & Risk Demystifier</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="header-center">
+        <div id="docStatusBadge" class="status-pill doc-status">
+          <span class="pulse-dot"></span>
+          <span id="docStatusText">Loading document...</span>
+        </div>
+        <div id="apiStatusBadge" class="status-pill api-status" onclick="openKeyModal()">
+          <span id="apiStatusDot" class="status-dot"></span>
+          <span id="apiStatusText">Checking API...</span>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <button class="btn btn-secondary btn-sm" onclick="openDocModal()" title="Inspect Document Text">
+          📄 View Document
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="openKeyModal()" title="Configure Gemini API Key">
+          🔑 API Key
+        </button>
+        <a href="/api/download-zip" class="btn btn-primary btn-sm" title="Download Full Project Source ZIP">
+          📦 Download Project ZIP
+        </a>
+      </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main class="main-content">
+      <!-- DOCUMENT INGESTION & SAMPLES PANEL -->
+      <section class="ingestion-section">
+        <div class="ingestion-grid">
+          <!-- DROPZONE -->
+          <div class="upload-card" id="dropZone">
+            <input type="file" id="pdfFileInput" accept=".pdf" class="file-input-hidden" />
+            <div class="upload-inner">
+              <div class="upload-icon-wrapper">
+                <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+              </div>
+              <div class="upload-instructions">
+                <p class="upload-title">Drop PDF legal agreement here or <span class="browse-link">browse</span></p>
+                <p class="upload-subtitle">PyMuPDF token-aware page parser & chunker (NDA, SaaS, Lease, Employment)</p>
+              </div>
+            </div>
+            <div id="uploadProgress" class="progress-bar-container hidden">
+              <div class="progress-bar-fill" id="progressBarFill"></div>
+            </div>
+          </div>
+
+          <!-- SAMPLE PRESETS & MANUAL INGEST -->
+          <div class="presets-card">
+            <div class="presets-header">
+              <span class="presets-title">⚡ Try Preloaded Enterprise Agreements</span>
+              <button class="text-btn" onclick="togglePasteArea()">Or paste raw text ▾</button>
+            </div>
+            <div class="sample-pills-list" id="samplePillsContainer">
+              <!-- Dynamically populated sample contract pills -->
+            </div>
+          </div>
+        </div>
+
+        <!-- HIDDEN PASTE AREA -->
+        <div id="pasteContainer" class="paste-container hidden">
+          <textarea id="pastedText" class="paste-textarea" placeholder="Paste full legal contract text here..."></textarea>
+          <div class="paste-actions">
+            <input type="text" id="pasteFilename" class="paste-name-input" placeholder="Contract title (e.g. Vendor Agreement.txt)" value="custom-contract.txt" />
+            <button class="btn btn-primary btn-sm" onclick="submitPastedText()">Ingest & Chunk Text</button>
+            <button class="btn btn-secondary btn-sm" onclick="togglePasteArea()">Cancel</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ACTIVE DOCUMENT SUMMARY METRICS BAR -->
+      <section class="doc-metrics-bar">
+        <div class="metric-item">
+          <span class="metric-label">Active Document:</span>
+          <span class="metric-val" id="metricFilename">Loading...</span>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric-item">
+          <span class="metric-label">Total Pages:</span>
+          <span class="metric-val highlight" id="metricPages">0</span>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric-item">
+          <span class="metric-label">Word Count:</span>
+          <span class="metric-val" id="metricWords">0</span>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric-item">
+          <span class="metric-label">Token Chunks (RAG):</span>
+          <span class="metric-val highlight" id="metricChunks">0</span>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric-item">
+          <span class="metric-label">Estimated Tokens:</span>
+          <span class="metric-val" id="metricTokens">0</span>
+        </div>
+      </section>
+
+      <!-- NAVIGATION TABS -->
+      <nav class="analysis-tabs">
+        <button class="tab-btn active" data-tab="summary" onclick="switchTab('summary')">
+          <span class="tab-icon">📖</span> Plain-English Summary
+        </button>
+        <button class="tab-btn" data-tab="penalties" onclick="switchTab('penalties')">
+          <span class="tab-icon">⚠️</span> Penalties & Deadlines
+        </button>
+        <button class="tab-btn" data-tab="compliance" onclick="switchTab('compliance')">
+          <span class="tab-icon">🛡️</span> Compliance & Risk Audit
+        </button>
+        <button class="tab-btn" data-tab="chat" onclick="switchTab('chat')">
+          <span class="tab-icon">💬</span> Context-Aware RAG Q&A
+        </button>
+      </nav>
+
+      <!-- TAB CONTENT WORKSPACES -->
+      <div class="tab-workspaces">
+        <!-- 1. PLAIN-ENGLISH SUMMARY TAB -->
+        <section id="tab-summary" class="tab-panel active">
+          <div class="panel-header">
+            <div class="panel-title-box">
+              <h2>Plain-English Executive Translation</h2>
+              <p>Translating dense legalese into clear, actionable human language.</p>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="loadSummary(true)">
+              🔄 Re-run Analysis
+            </button>
+          </div>
+
+          <div id="summaryLoading" class="skeleton-loader hidden">
+            <div class="skeleton-bar title"></div>
+            <div class="skeleton-bar text"></div>
+            <div class="skeleton-bar text"></div>
+            <div class="skeleton-bar text short"></div>
+          </div>
+
+          <div id="summaryContent" class="summary-layout">
+            <!-- TL;DR Hero Card -->
+            <div class="summary-hero-card">
+              <div class="hero-top">
+                <span class="badge-tag" id="sumDocType">Contract</span>
+                <h3 id="sumDocTitle" class="hero-doc-title">Document Title</h3>
+              </div>
+              <div class="tldr-box">
+                <span class="tldr-badge">TL;DR</span>
+                <p id="sumTldr" class="tldr-text">Analyzing agreement...</p>
+              </div>
+              <div class="parties-list" id="sumParties">
+                <!-- Injected Parties -->
+              </div>
+            </div>
+
+            <!-- Rights Granted vs Conceded Comparison Grid -->
+            <div class="comparison-grid">
+              <div class="comparison-card rights-card">
+                <div class="card-header">
+                  <span class="header-icon">✅</span>
+                  <h4>Core Rights Granted To You</h4>
+                </div>
+                <ul id="sumRightsGranted" class="bullet-list positive">
+                  <li>Loading...</li>
+                </ul>
+              </div>
+
+              <div class="comparison-card conceded-card">
+                <div class="card-header">
+                  <span class="header-icon">🚨</span>
+                  <h4>Rights Conceded / What You Give Up</h4>
+                </div>
+                <ul id="sumRightsConceded" class="bullet-list negative">
+                  <li>Loading...</li>
+                </ul>
+              </div>
+            </div>
+
+            <!-- Bottom Cards: Duration/Exit & Verdict -->
+            <div class="summary-lower-grid">
+              <div class="info-card">
+                <div class="card-header">
+                  <span class="header-icon">⏳</span>
+                  <h4>Term, Renewal & Exit Conditions</h4>
+                </div>
+                <p id="sumTermExit" class="info-text">Loading...</p>
+              </div>
+
+              <div class="info-card verdict-card">
+                <div class="card-header">
+                  <span class="header-icon">⚖️</span>
+                  <h4>Plain-English Legal Verdict</h4>
+                </div>
+                <p id="sumVerdict" class="verdict-text">Loading...</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. PENALTIES & OBLIGATIONS TAB -->
+        <section id="tab-penalties" class="tab-panel">
+          <div class="panel-header">
+            <div class="panel-title-box">
+              <h2>Penalties, Deadlines & Strict Obligations</h2>
+              <p>Forensic extraction of financial liabilities, liquidated damages, and auto-renewal traps.</p>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="loadPenalties(true)">
+              🔄 Re-run Audit
+            </button>
+          </div>
+
+          <div id="penaltiesLoading" class="skeleton-loader hidden">
+            <div class="skeleton-bar title"></div>
+            <div class="skeleton-bar text"></div>
+            <div class="skeleton-bar text"></div>
+          </div>
+
+          <div id="penaltiesContent" class="penalties-layout">
+            <!-- Strict Financial Penalties -->
+            <div class="section-card">
+              <div class="card-header">
+                <span class="header-icon">💸</span>
+                <h3>Strict Financial Penalties & Liquidated Damages</h3>
+              </div>
+              <div class="penalties-table-container">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Clause / Mechanism</th>
+                      <th>Financial Impact</th>
+                      <th>Trigger Condition</th>
+                      <th>Severity</th>
+                    </tr>
+                  </thead>
+                  <tbody id="penaltiesTableBody">
+                    <!-- Populated dynamically -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Operational Deadlines & Timeframes -->
+            <div class="section-card">
+              <div class="card-header">
+                <span class="header-icon">⏱️</span>
+                <h3>Strict Operational Obligations & Notice Windows</h3>
+              </div>
+              <div class="obligations-grid" id="obligationsContainer">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+
+            <!-- Unilateral Terms & Hidden Traps -->
+            <div class="dual-cards-row">
+              <div class="section-card half-card">
+                <div class="card-header">
+                  <span class="header-icon">⚖️</span>
+                  <h3>Unilateral & One-Sided Clauses</h3>
+                </div>
+                <div class="terms-list" id="unilateralContainer">
+                  <!-- Populated dynamically -->
+                </div>
+              </div>
+
+              <div class="section-card half-card">
+                <div class="card-header">
+                  <span class="header-icon">🪤</span>
+                  <h3>Hidden Sneaky Traps</h3>
+                </div>
+                <ul class="bullet-list warning-list" id="trapsContainer">
+                  <!-- Populated dynamically -->
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. COMPLIANCE & RISK AUDIT TAB -->
+        <section id="tab-compliance" class="tab-panel">
+          <div class="panel-header">
+            <div class="panel-title-box">
+              <h2>Compliance & Clause Risk Audit</h2>
+              <p>Risk severity scoring, unfair terms detection, and recommended counter-clause redlines.</p>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="loadCompliance(true)">
+              🔄 Re-run Audit
+            </button>
+          </div>
+
+          <div id="complianceLoading" class="skeleton-loader hidden">
+            <div class="skeleton-bar title"></div>
+            <div class="skeleton-bar text"></div>
+            <div class="skeleton-bar text"></div>
+          </div>
+
+          <div id="complianceContent" class="compliance-layout">
+            <!-- Overall Risk Gauge Scorecard -->
+            <div class="risk-scorecard">
+              <div class="gauge-container">
+                <div class="gauge-circle">
+                  <span id="riskGaugeNumber" class="gauge-number">--</span>
+                  <span class="gauge-scale">/100</span>
+                </div>
+                <div class="gauge-meta">
+                  <span id="riskLevelBadge" class="risk-badge">Evaluating</span>
+                  <span class="gauge-subtitle">Overall Legal Risk Score</span>
+                </div>
+              </div>
+
+              <div class="risk-rationale-box">
+                <h4 class="rationale-heading">Executive Risk Assessment</h4>
+                <p id="riskRationaleText">Conducting risk evaluation...</p>
+                <div class="negotiation-box">
+                  <h5>Top Negotiation Priorities:</h5>
+                  <ul id="negotiationList" class="priority-list"></ul>
+                </div>
+              </div>
+            </div>
+
+            <!-- Compliance Checklist -->
+            <div class="section-card">
+              <div class="card-header">
+                <span class="header-icon">📋</span>
+                <h3>Regulatory & Standard Terms Checklist</h3>
+              </div>
+              <div class="checklist-grid" id="complianceChecklist">
+                <!-- Dynamically populated -->
+              </div>
+            </div>
+
+            <!-- Clause-by-Clause Forensic Audit & Redlines -->
+            <div class="section-card">
+              <div class="card-header">
+                <span class="header-icon">🔍</span>
+                <h3>Clause-by-Clause Audit & Recommended Counter-Clauses</h3>
+              </div>
+              <div class="clause-cards-list" id="clauseAuditsList">
+                <!-- Dynamically populated -->
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. CONTEXT-AWARE RAG Q&A TAB -->
+        <section id="tab-chat" class="tab-panel">
+          <div class="chat-container">
+            <!-- Chat Header -->
+            <div class="chat-header">
+              <div class="chat-title-info">
+                <h3>Context-Aware Legal RAG Assistant</h3>
+                <p>Ask anything about this agreement. Responses strictly cite verified document clauses and page numbers.</p>
+              </div>
+              <button class="btn btn-secondary btn-sm" onclick="clearChat()">Clear Chat</button>
+            </div>
+
+            <!-- Suggested Question Pills -->
+            <div class="suggested-prompts-bar">
+              <span class="prompt-hint">Suggested Questions:</span>
+              <div class="prompt-chips" id="promptChips">
+                <button class="chip-btn" onclick="askQuestion('What are the financial penalties if I terminate early?')">
+                  💸 Early termination penalties?
+                </button>
+                <button class="chip-btn" onclick="askQuestion('Are there hidden auto-renewal clauses in this contract?')">
+                  🔄 Auto-renewal conditions?
+                </button>
+                <button class="chip-btn" onclick="askQuestion('What intellectual property or invention rights are being assigned?')">
+                  💡 IP and invention assignment?
+                </button>
+                <button class="chip-btn" onclick="askQuestion('Is there a non-compete clause, and what are its duration and scope?')">
+                  🚫 Non-compete scope & duration?
+                </button>
+                <button class="chip-btn" onclick="askQuestion('What are my indemnification and defense liabilities?')">
+                  🛡️ Indemnification liabilities?
+                </button>
+              </div>
+            </div>
+
+            <!-- Chat Messages Stream -->
+            <div class="chat-messages-box" id="chatMessagesBox">
+              <div class="chat-message bot-message">
+                <div class="message-avatar">⚖️</div>
+                <div class="message-content">
+                  <p>Hello! I am your <strong>LexiClear Legal RAG Assistant</strong>. I have indexed your document into token-aware context chunks.</p>
+                  <p>Ask me about specific risks, hidden fees, termination terms, obligations, or non-competes. I will provide plain-English answers backed by exact page citations!</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Chat Input Form -->
+            <form class="chat-input-form" onsubmit="handleChatSubmit(event)">
+              <input type="text" id="chatInput" class="chat-input" placeholder="Ask a question about this contract (e.g. Can the company terminate without notice?)..." autocomplete="off" />
+              <button type="submit" id="chatSendBtn" class="btn btn-primary chat-send-btn">
+                <span>Send</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="22" y1="2" x2="11" y2="13"></line>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+              </button>
+            </form>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- DOCUMENT VIEWER MODAL -->
+    <div id="docModal" class="modal-backdrop hidden">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-header">
+          <h3 id="docModalTitle">Contract Inspector</h3>
+          <button class="modal-close" onclick="closeDocModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div id="docViewerContent" class="doc-viewer-text">Loading document...</div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary btn-sm" onclick="closeDocModal()">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- API KEY SETTINGS MODAL -->
+    <div id="keyModal" class="modal-backdrop hidden">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3>Google Gemini API Configuration</h3>
+          <button class="modal-close" onclick="closeKeyModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-desc">
+            Enter your Google Gemini API key to activate live <strong>Gemini 3.8 Flash</strong> generative analysis.
+            If no key is configured, the application runs seamlessly in offline simulated intelligence mode.
+          </p>
+          <div class="form-group">
+            <label for="apiKeyInput">Gemini API Key</label>
+            <input type="password" id="apiKeyInput" class="form-control" placeholder="AIzaSy..." />
+          </div>
+          <div id="keyStatusMsg" class="form-feedback hidden"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary btn-sm" onclick="saveApiKey()">Save API Key</button>
+          <button class="btn btn-secondary btn-sm" onclick="closeKeyModal()">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
